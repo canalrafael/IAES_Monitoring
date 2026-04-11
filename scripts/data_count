@@ -1,0 +1,49 @@
+import pandas as pd
+import os
+from collections import Counter
+
+# Define the directory containing the data files
+data_dir = 'data/'
+
+# Initialize a global counter for all files
+total_label_counts = Counter()
+
+# Check if the directory exists
+if os.path.exists(data_dir):
+    # Get all .csv files and sort them
+    files = sorted([f for f in os.listdir(data_dir) if f.endswith('.csv')])
+    
+    if not files:
+        print("No CSV files found in the directory.")
+    else:
+        print(f"{'File Name':<25} | {'Label':<10} | {'Count'}")
+        print("-" * 50)
+
+        for file_name in files:
+            file_path = os.path.join(data_dir, file_name)
+            
+            try:
+                df = pd.read_csv(file_path)
+                
+                if 'LABEL' in df.columns:
+                    # Count for the current file
+                    current_file_counts = df['LABEL'].value_counts()
+                    
+                    for label, count in current_file_counts.items():
+                        print(f"{file_name:<25} | {label:<10} | {count}")
+                        # Add to the global total
+                        total_label_counts[label] += count
+                else:
+                    print(f"{file_name:<25} | Error: 'LABEL' column not found")
+                    
+            except Exception as e:
+                print(f"Error processing {file_name}: {e}")
+
+        # Print the General Sum Summary
+        print("\n" + "="*50)
+        print(f"{'GENERAL SUM OF EACH LABEL':^50}")
+        print("="*50)
+        for label, total in sorted(total_label_counts.items()):
+            print(f"Label {label:<10} | Total Count: {total}")
+else:
+    print(f"Directory '{data_dir}' not found.")
