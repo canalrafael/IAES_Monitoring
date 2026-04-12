@@ -20,11 +20,11 @@ RESULTS_DIR = 'results/phase2/'
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 # Best Configuration and Threshold Options
-BEST_CONFIG = {'layers': 2, 'units': 16, 'lr': 0.005, 'w': 10}
+BEST_CONFIG = {'layers': 2, 'units': 8, 'lr': 0.001, 'w': 19}
 THRESHOLDS = {
-    'High-Safety': 0.05,
-    'Balanced': 0.32,
-    'Low-FPR': 0.80
+    'High-Safety': 0.10,
+    'Balanced': 0.72,
+    'Low-FPR': 0.92
 }
 FEATURES = ['CPU_CYCLES', 'INSTRUCTIONS', 'CACHE_MISSES', 'BRANCH_MISSES', 'L2_CACHE_ACCESS']
 
@@ -98,6 +98,9 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=BEST_CONFIG['lr'])
     
     history = {'train_loss': [], 'val_loss': [], 'train_acc': [], 'val_acc': []}
+    best_val_loss = float('inf')
+    patience = 5
+    counter = 0
     
     print("Training best candidate for diagnostics...")
     for epoch in range(1000):
@@ -124,7 +127,20 @@ def main():
         history['train_acc'].append(t_correct/t_total)
         history['val_acc'].append(v_correct/v_total)
         
-        if (epoch+1) % 20 == 0: print(f"Epoch {epoch+1}/100 | Val Loss: {v_loss/len(val_loader):.4f} | Val Acc: {v_correct/v_total:.4f}")
+        current_val_loss = v_loss/len(val_loader)
+        if (epoch+1) % 10 == 0: 
+            print(f"Epoch {epoch+1}/1000 | Val Loss: {current_val_loss:.4f} | Val Acc: {v_correct/v_total:.4f}")
+
+        # Early Stopping
+        if current_val_loss < best_val_loss:
+            best_val_loss = current_val_loss
+            counter = 0
+            # Save temporary best state if needed, but here we just continue
+        else:
+            counter += 1
+            if counter >= patience:
+                print(f"Early stopping at epoch {epoch+1}")
+                break
 
     # 1. Loss Curve
     plt.figure()

@@ -23,7 +23,7 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 os.makedirs(MODELS_DIR, exist_ok=True)
 
 FEATURES = ['CPU_CYCLES', 'INSTRUCTIONS', 'CACHE_MISSES', 'BRANCH_MISSES', 'L2_CACHE_ACCESS']
-W_VALUES = [3, 5, 10, 20]
+W_VALUES = [2, 3, 5, 7, 11, 13, 17, 19]
 
 def engineer_features(df, w):
     df = df.copy()
@@ -101,7 +101,7 @@ def train_mlp(X_train, y_train, X_val, y_val, config):
     patience = 5
     counter = 0
     
-    for epoch in range(50):
+    for epoch in range(1000):
         model.train()
         for inputs, labels in train_loader:
             optimizer.zero_grad()
@@ -158,7 +158,7 @@ def main():
     grid_results = []
     
     # Search Space
-    w_to_test = [5, 10, 20] 
+    w_to_test = [2, 3, 5, 7, 11, 13, 17, 19] 
     architectures = [
         {'layers': 1, 'units': 8},
         {'layers': 1, 'units': 16},
