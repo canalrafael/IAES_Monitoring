@@ -23,7 +23,7 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 os.makedirs(MODELS_DIR, exist_ok=True)
 
 FEATURES = ['CPU_CYCLES', 'INSTRUCTIONS', 'CACHE_MISSES', 'BRANCH_MISSES', 'L2_CACHE_ACCESS']
-W_VALUES = [2, 3, 5, 7, 11, 13, 17, 19]
+W_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
 
 def engineer_features(df, w):
     df = df.copy()
@@ -158,12 +158,14 @@ def main():
     grid_results = []
     
     # Search Space
-    w_to_test = [2, 3, 5, 7, 11, 13, 17, 19] 
+    w_to_test = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20] 
     architectures = [
         {'layers': 1, 'units': 8},
         {'layers': 1, 'units': 16},
         {'layers': 2, 'units': 8},
-        {'layers': 2, 'units': 16}
+        {'layers': 2, 'units': 16},
+        {'layers': 3, 'units': 8},
+        {'layers': 3, 'units': 16}
     ]
     lrs = [1e-3, 5e-3]
     

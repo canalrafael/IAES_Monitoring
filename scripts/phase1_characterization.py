@@ -3,9 +3,9 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy.stats import entropy
-from scipy.spatial.distance import jensenshannon
 import glob
+import gc
+from scipy.stats import ks_2samp
 
 # Set aesthetically pleasing style
 sns.set_theme(style="whitegrid", palette="muted")
@@ -16,127 +16,239 @@ DATA_DIR = 'data/'
 RESULTS_DIR = 'results/phase1/'
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-def cohen_d(x, y):
-    nx = len(x)
-    ny = len(y)
-    dof = nx + ny - 2
-    return (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof=1)**2 + (ny-1)*np.std(y, ddof=1)**2) / dof)
+class SeparabilityAccumulator:
+    """Accumulates sum, sum_sq, and N for weighted Cohen's d computation."""
+    def __init__(self):
+        self.stats = {} # feature -> label -> {sum, sum_sq, n}
+        self.samples = {} # feature -> label -> list (subsampled for KS)
+        self.max_global_samples = 50000
+    
+    def update(self, feat_name, label, values):
+        # Filter NaNs and Infs to ensure numerical stability
+        mask = np.isfinite(values)
+        if not mask.any(): return
+        clean_values = values[mask].astype(np.float64)
+        
+        if feat_name not in self.stats:
+            self.stats[feat_name] = {0: {'s': 0.0, 'ss': 0.0, 'n': 0}, 2: {'s': 0.0, 'ss': 0.0, 'n': 0}}
+            self.samples[feat_name] = {0: [], 2: []}
+        
+        self.stats[feat_name][label]['s'] += np.sum(clean_values)
+        self.stats[feat_name][label]['ss'] += np.sum(np.square(clean_values))
+        self.stats[feat_name][label]['n'] += len(clean_values)
+        
+        # Consistent sampling pool for KS-test
+        if len(self.samples[feat_name][label]) < (self.max_global_samples // 2):
+            # Take evenly spread samples
+            step = max(1, len(clean_values) // 200)
+            self.samples[feat_name][label].extend(clean_values[::step][:200])
+
+    def get_cohen_d(self, feat_name):
+        s0, ss0, n0 = self.stats[feat_name][0]['s'], self.stats[feat_name][0]['ss'], self.stats[feat_name][0]['n']
+        s2, ss2, n2 = self.stats[feat_name][2]['s'], self.stats[feat_name][2]['ss'], self.stats[feat_name][2]['n']
+        
+        if n0 < 2 or n2 < 2: return 0.0
+        
+        m0, m2 = s0 / n0, s2 / n2
+        v0 = max(0, (ss0 / n0) - (m0**2))
+        v2 = max(0, (ss2 / n2) - (m2**2))
+        
+        std_pool = np.sqrt(((n0 - 1) * v0 + (n2 - 1) * v2) / (n0 + n2 - 2))
+        if std_pool < 1e-9: return 0.0
+        return (m0 - m2) / std_pool
 
 def overlap_coefficient(x, y, bins=100):
-    hist_x, bin_edges = np.histogram(x, bins=bins, density=True)
-    hist_y, _ = np.histogram(y, bins=bin_edges, density=True)
+    if len(x) == 0 or len(y) == 0: return 1.0
+    arr_x = np.array(x); arr_y = np.array(y)
+    xmin = min(np.nanmin(arr_x), np.nanmin(arr_y))
+    xmax = max(np.nanmax(arr_x), np.nanmax(arr_y))
+    if not np.isfinite(xmin) or not np.isfinite(xmax) or xmax - xmin < 1e-9: return 1.0
+    hist_x, bin_edges = np.histogram(arr_x, bins=bins, range=(xmin, xmax), density=True)
+    hist_y, _ = np.histogram(arr_y, bins=bin_edges, density=True)
     return np.sum(np.minimum(hist_x, hist_y) * np.diff(bin_edges))
 
-def signal_to_noise_ratio(benign, attack):
-    signal = np.abs(np.mean(benign) - np.mean(attack))
-    noise = (np.std(benign) + np.std(attack)) / 2
-    return signal / (noise + 1e-9)
-
-def load_and_filter_data(data_dir):
-    csv_files = glob.glob(os.path.join(data_dir, "*.csv"))
-    all_dfs = []
-    
-    for f in csv_files:
-        try:
-            df = pd.read_csv(f)
-            # Filter only Label 0 (Benign) and Label 2 (Interference)
-            df = df[df['LABEL'].isin([0, 2])].copy()
-            if not df.empty:
-                df['source_file'] = os.path.basename(f)
-                all_dfs.append(df)
-        except Exception as e:
-            print(f"Error loading {f}: {e}")
-            
-    return pd.concat(all_dfs, ignore_index=True)
-
 def main():
-    print("Loading data...")
-    df = load_and_filter_data(DATA_DIR)
+    print("Starting Streaming Advanced Phase 1 Analysis...")
+    csv_files = sorted(glob.glob(os.path.join(DATA_DIR, "*.csv")))
     
-    features = ['CPU_CYCLES', 'INSTRUCTIONS', 'CACHE_MISSES', 'BRANCH_MISSES', 'L2_CACHE_ACCESS']
+    accumulator = SeparabilityAccumulator()
+    window_sizes = [8, 10, 12, 14]
+    eps = 1e-9
     
-    # 1. Statistical Separability
-    results = []
-    for feat in features:
-        benign = df[df['LABEL'] == 0][feat].values
-        attack = df[df['LABEL'] == 2][feat].values
-        
-        if len(benign) == 0 or len(attack) == 0:
-            continue
+    total_raw_samples = 0
+    total_pure_samples = 0
+
+    for f_idx, f_path in enumerate(csv_files):
+        try:
+            df = pd.read_csv(f_path)
+            df = df[df['LABEL'].isin([0, 2])].reset_index(drop=True)
+            if len(df) < 500: continue # Skip very short files
             
-        d_f = np.abs(np.mean(benign) - np.mean(attack))
-        d_cohen = cohen_d(benign, attack)
-        snr = signal_to_noise_ratio(benign, attack)
+            raw_count = len(df)
+            total_raw_samples += raw_count
+            
+            # Base Derived (Intermediate RAW for deltas)
+            df['IPC'] = (df['INSTRUCTIONS'] / (df['CPU_CYCLES'] + eps)).astype(np.float32)
+            df['MPKI'] = ((df['CACHE_MISSES'] * 1000) / (df['INSTRUCTIONS'] + eps)).astype(np.float32)
+            df['WASTE'] = (df['CPU_CYCLES'] / (df['INSTRUCTIONS'] + eps)).astype(np.float32)
+            df['BUS_P'] = (df['L2_CACHE_ACCESS'] / (df['CPU_CYCLES'] + eps)).astype(np.float32)
+            
+            base_cols = ['IPC', 'MPKI', 'WASTE', 'BUS_P']
+            
+            # Relative Deltas (On raw values)
+            for col in ['IPC', 'MPKI']:
+                df[f'd_{col}'] = df[col].pct_change().fillna(0).astype(np.float32)
+            delta_cols = [f'd_{col}' for col in ['IPC', 'MPKI']]
+
+            # Z-Normalization (After deltas)
+            for col in base_cols:
+                m, s = df[col].mean(), df[col].std()
+                df[col] = ((df[col] - m) / (s + eps)).astype(np.float32)
+
+            # Sequential Window Processing
+            for w in window_sizes:
+                # Purity Filter (90% threshold)
+                rolling_label_sum = df['LABEL'].rolling(w).sum()
+                # 0 for benign, 2 for interference. 
+                # Pure benign (0*w) -> sum=0
+                # Pure interference (2*w) -> sum=2*w
+                # 90% purity: sum <= 0.1*(2*w) or sum >= 0.9*(2*w)
+                p_benign = (rolling_label_sum <= (0.1 * 2 * w))
+                p_interf = (rolling_label_sum >= (0.9 * 2 * w))
+                pure_mask = p_benign | p_interf
+                
+                pure_indices = np.where(pure_mask)[0]
+                if len(pure_indices) < 200: continue
+
+                # Sampling consistent indices
+                np.random.seed(42 + f_idx)
+                if len(pure_indices) > 2500:
+                    sample_idx = np.random.choice(pure_indices, size=2500, replace=False)
+                else:
+                    sample_idx = pure_indices
+                
+                labels = df['LABEL'].iloc[sample_idx].values
+                total_pure_samples += len(sample_idx)
+
+                # Feature Aggregation
+                for col in base_cols:
+                    # Mean metrics
+                    feat_m = f'{col}_avg_w{w}'
+                    vals_m = df[col].rolling(w).mean().iloc[sample_idx].values
+                    for l in [0, 2]:
+                        mask = (labels == l)
+                        if mask.any(): accumulator.update(feat_m, l, vals_m[mask])
+                    
+                    # Std metrics
+                    feat_s = f'{col}_std_w{w}'
+                    vals_s = df[col].rolling(w).std().iloc[sample_idx].values
+                    for l in [0, 2]:
+                        mask = (labels == l)
+                        if mask.any(): accumulator.update(feat_s, l, vals_s[mask])
+
+                # Percentiles (IPC/MPKI)
+                for col in ['IPC', 'MPKI']:
+                    feat_p = f'{col}_p95p5_w{w}'
+                    rolled = df[col].rolling(w)
+                    vals_p = (rolled.quantile(0.95) - rolled.quantile(0.05)).iloc[sample_idx].values
+                    for l in [0, 2]:
+                        mask = (labels == l)
+                        if mask.any(): accumulator.update(feat_p, l, vals_p[mask])
+                
+                # Deltas
+                for col in delta_cols:
+                    feat_d = f'{col}_avg_w{w}'
+                    vals_d = df[col].rolling(w).mean().iloc[sample_idx].values
+                    for l in [0, 2]:
+                        mask = (labels == l)
+                        if mask.any(): accumulator.update(feat_d, l, vals_d[mask])
+
+                gc.collect()
+
+            del df
+            gc.collect()
+            print(f"Processed {f_idx+1}/{len(csv_files)}: {os.path.basename(f_path)} (Pure Samples: {total_pure_samples})")
+
+        except Exception as e:
+            print(f"Error in {f_path}: {e}")
+
+    # Finalize Statistics
+    print(f"\nAggregation Complete. Total Pure Samples: {total_pure_samples}")
+    stats_results = []
+    
+    for feat in accumulator.stats.keys():
+        d = accumulator.get_cohen_d(feat)
         
-        # Divergence (using histogram for distribution approximation)
-        bx, be = np.histogram(benign, bins=100, density=True)
-        ax, _ = np.histogram(attack, bins=be, density=True)
-        # Avoid zero for JS divergence
-        js_div = jensenshannon(bx + 1e-10, ax + 1e-10)
+        # Collect samples for KS/Overlap
+        b = np.array(accumulator.samples[feat][0])
+        i = np.array(accumulator.samples[feat][2])
         
-        overlap = overlap_coefficient(benign, attack)
+        if len(b) < 20 or len(i) < 20: continue
         
-        results.append({
+        ks_stat, ks_pval = ks_2samp(b, i)
+        overlap = overlap_coefficient(b, i)
+        
+        abs_d = abs(d)
+        tier = "Negligible"
+        if abs_d >= 0.8: tier = "Strong"
+        elif abs_d >= 0.5: tier = "Moderate"
+        elif abs_d >= 0.3: tier = "Weak"
+        
+        stats_results.append({
             'feature': feat,
-            'mean_diff': d_f,
-            'cohen_d': d_cohen,
-            'js_divergence': js_div,
-            'snr': snr,
-            'overlap': overlap
+            'weighted_cohen_d': d,
+            'abs_d': abs_d,
+            'ks_stat': ks_stat,
+            'ks_pval': ks_pval,
+            'overlap': overlap,
+            'tier': tier,
+            'n0': accumulator.stats[feat][0]['n'],
+            'n2': accumulator.stats[feat][2]['n']
         })
+
+    stats_df = pd.DataFrame(stats_results).sort_values(by='abs_d', ascending=False)
+    
+    # Correlation Pruning (Approximate using pooled samples)
+    print("Pruning redundant features (corr > 0.95)...")
+    final_output = []
+    already_selected = []
+    
+    for _, row in stats_df.iterrows():
+        f_name = row['feature']
+        unique = True
         
-        # Density Plots
+        # Use full pooled samples for correlation check
+        pool_f = np.concatenate([accumulator.samples[f_name][0], accumulator.samples[f_name][2]])
+        
+        for seen in already_selected:
+            pool_s = np.concatenate([accumulator.samples[seen][0], accumulator.samples[seen][2]])
+            # Length might differ slightly due to reservoir sampling, crop to min
+            min_L = min(len(pool_f), len(pool_s))
+            c = np.corrcoef(pool_f[:min_L], pool_s[:min_L])[0, 1]
+            if abs(c) > 0.95:
+                unique = False
+                break
+        
+        if unique:
+            final_output.append(row)
+            already_selected.append(f_name)
+    
+    final_df = pd.DataFrame(final_output).drop(columns=['abs_d'])
+    final_df.to_csv(os.path.join(RESULTS_DIR, 'phase1_feature_stats.csv'), index=False)
+    print(f"Final Selection: {len(final_df)} features ranked and pruned.")
+    
+    # Visualization
+    top_v = final_df[final_df['tier'].isin(['Strong', 'Moderate'])].head(5)
+    for feat in top_v['feature'].values:
         plt.figure()
-        sns.kdeplot(data=df, x=feat, hue='LABEL', fill=True, common_norm=False, palette={0: 'blue', 2: 'red'})
-        plt.title(f'Density Distribution: {feat} (Benign vs Interference)')
-        plt.savefig(os.path.join(RESULTS_DIR, f'density_{feat.lower()}.png'))
+        sns.kdeplot(accumulator.samples[feat][0], fill=True, label='Benign', color='blue', alpha=0.5)
+        sns.kdeplot(accumulator.samples[feat][2], fill=True, label='Interference', color='red', alpha=0.5)
+        plt.title(f'Separator: {feat} (Tier: {top_v[top_v["feature"]==feat]["tier"].values[0]})')
+        plt.legend()
+        plt.savefig(os.path.join(RESULTS_DIR, f'top_separator_{feat}.png'))
         plt.close()
 
-    # 2. Feature Ranking
-    results_df = pd.DataFrame(results)
-    # Normalize and combine metrics for ranking (Higher d_cohen, higher js_div, lower overlap = better)
-    # We'll rank primarily by Cohen's d (effect size) as it's the standard for physical magnitude
-    results_df = results_df.sort_values(by='cohen_d', ascending=False, key=abs)
-    results_df.to_csv(os.path.join(RESULTS_DIR, 'feature_importance.csv'), index=False)
-    print("Feature importance saved to feature_importance.csv")
-
-    # 3. Correlation Matrix
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(df[features + ['LABEL']].corr(), annot=True, cmap='coolwarm', fmt=".2f")
-    plt.title('Feature Correlation Matrix')
-    plt.savefig(os.path.join(RESULTS_DIR, 'correlation_matrix.png'))
-    plt.close()
-
-    # 4. Temporal Behavior (Example transition)
-    # Pick a file that likely contains a transition (Label 0 -> 2)
-    transition_found = False
-    for group_name, group_df in df.groupby('source_file'):
-        labels = group_df['LABEL'].unique()
-        if 0 in labels and 2 in labels:
-            # Sort by timestamp (approximate if TIMESTAMP is string)
-            group_df = group_df.copy()
-            # If TIMESTAMP is like "16:03:15:605", it might need parsing
-            # For now, we use index as time proxy
-            group_df = group_df.reset_index()
-            
-            plt.figure(figsize=(14, 10))
-            for i, feat in enumerate(features, 1):
-                plt.subplot(len(features), 1, i)
-                sns.lineplot(data=group_df, x='index', y=feat, hue='LABEL', palette={0: 'blue', 2: 'red'}, legend=False)
-                plt.ylabel(feat)
-                if i == 1:
-                    plt.title(f'Temporal Transition in {group_name}')
-            
-            plt.tight_layout()
-            plt.savefig(os.path.join(RESULTS_DIR, f'temporal_transition_{group_name.split(".")[0]}.png'))
-            plt.close()
-            transition_found = True
-            break
-            
-    if not transition_found:
-        print("Warning: No single file with both Benign (0) and Interference (2) found for temporal plot.")
-
-    print("Phase 1 analysis complete. Check /results/phase1/ for outputs.")
+    print("Phase 1 streaming analysis complete. Check results/phase1/")
 
 if __name__ == "__main__":
     main()
