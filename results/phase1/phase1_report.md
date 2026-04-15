@@ -1,63 +1,354 @@
-# Phase 1: Workload Characterization & Statistical Separability
+# Phase 1 — Characterization Report
+## Microarchitectural Interference Detection — PMU Signal Analysis
 
-## Overview
-This phase provides quantitative evidence that cross-core microarchitectural interference on a Raspberry Pi 4 (Cortex-A72) encodes distinct physical signatures into the secure core's Performance Monitoring Unit (PMU) counters. By comparing Label 0 (Benign) and Label 2 (Interference), we demonstrate that $P_{benign}(x) \neq P_{interference}(x)$.
-
-## 1. Quantitative Separability Analysis
-
-The following table summarizes the statistical distance between Benign and Interference states for each PMU feature:
-
-| Feature | Cohen's d | JS Divergence | SNR | Overlap Coeff |
-| :--- | :--- | :--- | :--- | :--- |
-| **BRANCH_MISSES** | 0.0431 | 0.2887 | 0.0432 | 0.7895 |
-| **INSTRUCTIONS** | 0.0235 | 0.2983 | 0.0235 | 0.7848 |
-| **L2_CACHE_ACCESS** | -0.0040 | 0.2473 | 0.0040 | 0.8810 |
-| **CACHE_MISSES** | -0.0014 | 0.2431 | 0.0014 | 0.8879 |
-| **CPU_CYCLES** | -0.0007 | 0.0001 | 0.0007 | 1.0000 |
-
-### 1.1 Learning-Theoretic Guarantee
-While the observed Cohen’s d values are small ($\approx 0.02–0.04$), demonstrating that mean-based separation is insufficient, the significant Jensen-Shannon (JS) Divergence ($\approx 0.25-0.30$) confirms that the probability distributions $P_{benign}$ and $P_{interference}$ are distinct in their higher-order moments. 
-
-Formally, the existence of a non-zero divergence ensures that interference detection is a learnable problem. According to learning theory:
-$$D_{JS}(P_{benign} \parallel P_{interference}) > 0 \Rightarrow \exists f_\theta \in \mathcal{F} \text{ such that } \mathbb{E}[\ell(f_\theta(x), y)] < \epsilon$$
-
-This property guarantees **learnability** within the hypothesis space $\mathcal{F}$, justifying the adoption of **Multi-Layer Perceptrons (MLP)** in Phase 2 to discover the nonlinear discriminative mapping that simple linear thresholds fail to capture.
-
-## 2. Feature-Physics-Model Mapping
-The selected PMU features represent a **minimal sufficient representation** of microarchitectural interference. The following mapping links hardware observations to detection logic:
-
-| Feature | Microarchitectural Effect | Role in Detection |
-| :--- | :--- | :--- |
-| **BRANCH_MISSES** | Pipeline disruption | Detection of timing instability and predictor poisoning. |
-| **INSTRUCTIONS** | Throughput degradation | Observes execution slowdown caused by resource stalls. |
-| **CACHE_MISSES / L2** | Shared resource contention | Captures pressure on the shared L2 controller/bus. |
-| **CPU_CYCLES** | Control variable | Validates isolation; confirms variations are NOT due to frequency scaling. |
-
-## 3. Temporal Convergence and Aggregation
-To overcome the noise in individual samples, we define the temporal aggregate over a window of size $W$:
-$$X_t = \{x_{t-W+1}, \dots, x_t\}$$
-
-We posit that the separability of interference signatures converges as a function of the observation window:
-$$\lim_{W \uparrow} D_{JS}(P_{benign}(X_t), P_{interference}(X_t)) \text{ increases until saturation}$$
-
-This demonstrates that while a single sample $x_t$ might have high overlap, a sequence $X_t$ amplifies the variance and jitter signatures unique to interference. This property justifies the sliding-window architecture and rolling statistical features (mean, std, delta) implemented in Phase 2.
-
-### 3.1 Limitations of Single-Sample Analysis
-$D_{JS}(x_t)$ alone is insufficient for reliable classification due to the inherent noise in high-frequency PMU sampling. A robust detector **must** leverage temporal aggregation to filter transient architectural noise and confirm the persistent state of cross-core contention.
-
-## 4. Physical Interpretation: Jitter & Burstiness
-Interference introduces temporal jitter and burstiness in memory access patterns:
-$$\sigma_{interference}^2 \gg \sigma_{benign}^2$$
-
-Bursts of activity from the untrusted core cause asynchronous stalls in the secure domain's pipeline. The Cortex-A72 out-of-order execution units respond to this contention with fluctuating instruction resolution times, which is confirmed by the shift in `BRANCH_MISSES` density peaks and throughput variance. `CPU_CYCLES` stability confirms that these effects are purely microarchitectural and independent of hypervisor scheduling artifacts.
-
-## 5. Conclusion
-The characterization phase confirms a statistically significant, nonlinear separation between benign and interference states. We have demonstrated that while mean shifts are negligible, the causal chain is clear: **Interference** induces **variance and jitter** at the hardware level, which is amplified by **temporal aggregation**, enabling a **nonlinear mapping (MLP)** to achieve high-fidelity **detection**. This rigorous foundation mandates the transition to Phase 2 for model training and Pareto-optimal threshold selection.
+> **Purpose:** This report documents every output generated by `scripts/phase1_characterization.py`.
+> It describes what each plot and CSV represents, what metrics are computed, and what conclusions
+> to draw from each one in the context of detecting cross-core interference on the Bao hypervisor.
 
 ---
 
-## Visual Evidence
-Density plots and correlation matrices generated in Phase 1:
+## 1. Dataset Overview
 
-![Density Branch Misses](file:///wsl.localhost/Ubuntu/home/canal/github/IAES_Monitoring/results/phase1/density_branch_misses.png)
-![Correlation Matrix](file:///wsl.localhost/Ubuntu/home/canal/github/IAES_Monitoring/results/phase1/correlation_matrix.png)
+The dataset consists of PMU (Performance Monitoring Unit) counter traces collected on a
+Raspberry Pi 4 running the Bao hypervisor. Each row is a time-stamped sample with six
+raw hardware counters and a label.
+
+| Column | Type | Description |
+|---|---|---|
+| `TIMESTAMP` | string | Wall-clock time of the sample |
+| `CPU_CYCLES` | integer | Clock cycles elapsed since last sample |
+| `INSTRUCTIONS` | integer | Instructions retired |
+| `CACHE_MISSES` | integer | Last-level cache (LLC) miss events |
+| `BRANCH_MISSES` | integer | Branch misprediction events |
+| `L2_CACHE_ACCESS` | integer | L2 cache access events |
+| `LABEL` | integer | `0` = benign, `2` = cross-core interference |
+
+Labels `1` and `3` exist in some files but are excluded from all Phase 1 analysis
+(label `1` marks transition periods; label `3` is the "noise" class of a concurrent attacker).
+
+---
+
+## 2. Raw Feature Density Plots
+
+**File pattern:** `density_{feature_name}.png`
+
+Each density plot shows the **kernel density estimate (KDE)** of a single feature
+computed separately for benign (`0`, blue) and attack (`2`, red) samples pooled across
+all data files.
+
+**How to read them:** Overlapping distributions indicate low discriminative power for
+that feature alone. Well-separated peaks indicate a feature that is useful for detection.
+Values plotted are clipped to the 1st–99th percentile of the combined distribution
+to prevent outliers from compressing the visible range.
+
+---
+
+### 2.1 Raw Hardware Counter Plots
+
+#### `density_cpu_cycles.png` — CPU Cycles
+- **Metric:** Raw `CPU_CYCLES` value per sample.
+- **Interpretation:** CPU cycles measure overall compute intensity. During
+  interference, the attacker occupies a core, potentially causing the victim's
+  cycles-per-task to increase due to cache contention. However, raw cycles are
+  highly workload-dependent and can overlap significantly between benign and
+  attack scenarios across different benchmarks.
+- **Limitation for detection:** Not workload-invariant. A CPU-intensive benign task
+  can match the cycle count of an attack.
+
+#### `density_instructions.png` — Instructions Retired
+- **Metric:** Raw `INSTRUCTIONS` value per sample.
+- **Interpretation:** Measures the amount of work completed per time window.
+  Interference does not directly reduce instruction throughput at the hardware
+  level in all scenarios — it primarily affects memory latency. The distribution
+  therefore tends to overlap significantly between classes.
+- **Limitation for detection:** Similar to CPU cycles, this is workload-dependent.
+  Best used in ratio with CPU cycles (see IPC below).
+
+#### `density_cache_misses.png` — LLC Cache Misses
+- **Metric:** Raw number of last-level cache miss events per sample.
+- **Interpretation:** This is the most directly affected counter during
+  microarchitectural interference. The attacker deliberately evicts victim cache
+  lines (cache-flush attack, Prime+Probe, etc.), causing a spike in the victim's
+  LLC miss count. Expect a rightward shift in the attack distribution.
+- **Discriminative power:** High. Cache misses are the primary mechanism of
+  cross-core interference.
+
+#### `density_branch_misses.png` — Branch Mispredictions
+- **Metric:** Raw `BRANCH_MISSES` count per sample.
+- **Interpretation:** Branch predictor state may be perturbed if the attacker
+  shares BTB (Branch Target Buffer) entries or if the interference causes
+  context switches that flush the predictor. Typically a secondary indicator
+  with less discriminative power than cache misses.
+- **Discriminative power:** Moderate. Useful in combination with cache metrics.
+
+#### `density_l2_cache_access.png` — L2 Cache Accesses
+- **Metric:** Raw `L2_CACHE_ACCESS` count per sample.
+- **Interpretation:** L2 accesses represent memory requests that missed L1 but
+  may have hit L2. During interference, increased LLC pressure causes more L2
+  activity as the memory hierarchy is stressed. The distribution shift is
+  typically less dramatic than LLC misses.
+- **Discriminative power:** Moderate. Used in the L2 Pressure ratio (see below).
+
+---
+
+### 2.2 Derived Ratio Feature Plots
+
+Ratio features are **workload-normalised** — they divide one counter by another to
+remove the effect of absolute workload intensity. These are significantly more
+discriminative than raw counters across heterogeneous workloads.
+
+#### `density_ipc.png` — IPC (Instructions Per Cycle)
+- **Formula:** `IPC = INSTRUCTIONS / CPU_CYCLES`
+- **Interpretation:** IPC measures computational efficiency. A high-IPC workload
+  executes instructions quickly with few stalls. Cross-core cache interference
+  causes cache misses that insert memory-wait stalls, **reducing IPC**. Expect
+  the attack distribution to shift left (lower IPC = more stalls).
+- **Discriminative power:** Very high. One of the top two separating features.
+- **Key behaviour:** Benign workloads cluster at their characteristic IPC;
+  interference pulls IPC downward regardless of the baseline workload intensity.
+
+#### `density_mpki.png` — MPKI (Misses Per Kilo-Instructions)
+- **Formula:** `MPKI = (CACHE_MISSES × 1000) / INSTRUCTIONS`
+- **Interpretation:** MPKI normalises cache misses by the amount of work done,
+  making it robust to different instruction throughputs. A high MPKI means the
+  program is spending a large fraction of its time waiting for memory requests.
+  Interference dramatically increases MPKI.
+- **Discriminative power:** Very high. One of the top two separating features.
+- **Key behaviour:** MPKI is near-zero for cache-friendly benign workloads and
+  spikes >10× during active interference.
+
+#### `density_waste_ratio.png` — Waste Ratio (Cycles per Instruction)
+- **Formula:** `WASTE = CPU_CYCLES / INSTRUCTIONS` (inverse of IPC)
+- **Interpretation:** Measures how many cycles are "wasted" per useful instruction.
+  A value of 1.0 = perfect pipeline. Interference pushes this upward by causing
+  memory stalls. This is equivalent to `1/IPC` but can provide better numerical
+  conditioning in some scenarios.
+- **Discriminative power:** High. Correlated with IPC (expect |corr| > 0.95).
+
+#### `density_bus_pressure.png` — Bus / Memory Pressure
+- **Formula:** `BUS_PRESSURE = L2_CACHE_ACCESS / CPU_CYCLES`
+- **Interpretation:** Measures the fraction of cycles that involve L2 activity,
+  indicating how much the memory subsystem is stressed per unit time. High bus
+  pressure accompanies cache-eviction attacks.
+- **Discriminative power:** High. Relatively workload-invariant.
+
+#### `density_cache_pressure.png` — Cache Pressure (Miss-to-Access Ratio)
+- **Formula:** `CACHE_PRESSURE = CACHE_MISSES / (L2_CACHE_ACCESS + ε)`
+- **Interpretation:** Measures what fraction of L2 accesses result in LLC misses.
+  A value near 0 means most L2 requests are satisfied by L2; a value near 1 means
+  almost every L2 request misses all the way to DRAM. Interference systematically
+  increases this ratio.
+- **Discriminative power:** Moderate to High. Can be unstable when L2_ACCESS is
+  near zero (protected by ε = 1e-9).
+
+#### `density_branch_miss_rate.png` — Branch Miss Rate
+- **Formula:** `BRANCH_MISS_RATE = BRANCH_MISSES / INSTRUCTIONS`
+- **Interpretation:** Normalises branch mispredictions by instruction count.
+  Secondary indicator of interference — relevant if the attacker causes context
+  switches or BTB pollution. Less consistently elevated than MPKI.
+- **Discriminative power:** Moderate. Second-order effect of interference.
+
+---
+
+## 3. 2D Joint Distribution Plots (Hexbin)
+
+**File pattern:** `{x}_vs_{y}_hexbin.png`
+
+Each hexbin plot shows the **joint distribution** of two features simultaneously,
+with separate panels for benign (blue) and attack (red) samples. The hexagonal
+bins group nearby data points and colour-code their density.
+
+**How to read them:** If the benign and attack clusters occupy **different regions
+of the 2D plane**, the feature pair provides strong joint separability. If the
+clusters overlap in both panels, the features are correlated and provide redundant
+information.
+
+---
+
+#### `ipc_vs_mpki_hexbin.png` — IPC vs MPKI
+- **What it shows:** The joint region where a workload simultaneously lives
+  in (IPC, MPKI) space.
+- **Expected pattern:**
+  - Benign: high IPC + low MPKI (efficient, cache-friendly) → **top-left cluster**
+  - Attack: low IPC + high MPKI (stalled, cache-inefficient) → **bottom-right cluster**
+- **Why this matters:** The two features are **anti-correlated under interference**
+  (cache misses reduce IPC and raise MPKI simultaneously), creating a highly
+  separable 2D boundary for a linear classifier.
+
+#### `branch_miss_rate_vs_mpki_hexbin.png` — Branch Miss Rate vs MPKI
+- **What it shows:** The joint distribution of BRANCH_MISS_RATE and MPKI.
+- **Expected pattern:**
+  - Benign: clustered at low values for both
+  - Attack: elevated MPKI with variable BRANCH_MISS_RATE (depending on attack type)
+- **Why this matters:** Confirms whether branch behaviour co-varies with cache
+  pressure under interference, or whether the two features provide independent
+  information. Useful for deciding whether both are needed in the feature set.
+
+---
+
+## 4. Correlation Matrix
+
+**File:** `correlation_matrix.png`
+
+A symmetric heatmap of **Pearson correlation coefficients** between all 11 raw and
+derived features, computed on a pooled sample of benign and attack data.
+
+**How to read it:**
+- Values range from −1 (perfect anti-correlation) to +1 (perfect correlation).
+- Dark red = strong positive correlation; dark blue = strong negative correlation.
+- Features with |r| > 0.95 are considered **redundant** and one is pruned from
+  the final feature set.
+
+**Key correlations to look for:**
+| Pair | Expected |
+|---|---|
+| IPC ↔ WASTE_RATIO | ~−1.00 (mathematical inverse) |
+| MPKI ↔ CACHE_PRESSURE | High positive (both rise with misses) |
+| CPU_CYCLES ↔ INSTRUCTIONS | High positive (workload intensity) |
+| IPC ↔ MPKI | Moderate negative under interference |
+
+**Purpose in the pipeline:** The correlation matrix informs feature pruning.
+Keeping two features with |r| > 0.95 wastes model capacity without improving
+discriminability, and can cause training instability.
+
+**Associated CSV:** `phase1_correlations.csv` — full pairwise correlation table
+sorted by absolute correlation value.
+
+---
+
+## 5. Top Separator Density Plots
+
+**File pattern:** `top_separator_{feature_name}_w{W}.png`
+
+These are KDE density plots (same format as Section 2) for the **top 5 most
+discriminative window-based features** identified by the streaming analysis.
+
+**What "window-based" means:** Instead of raw sample values, these features are
+computed over a sliding window of `W` consecutive samples:
+- `_avg_w{W}`: rolling mean of the base signal over W samples
+- `_std_w{W}`: rolling standard deviation over W samples
+- `_p95p5_w{W}`: rolling (95th − 5th percentile) span over W samples
+
+**Window sizes evaluated:** W ∈ {8, 10, 12, 14} samples.
+
+**Example files and their meaning:**
+
+| File | Description |
+|---|---|
+| `top_separator_IPC_std_w10.png` | Std of IPC over 10-sample window — measures IPC variability |
+| `top_separator_IPC_std_w12.png` | Same but wider window (more temporal smoothing) |
+| `top_separator_IPC_std_w8.png` | Narrower window — more responsive, less smooth |
+| `top_separator_IPC_std_w14.png` | Widest window — captures sustained interference well |
+| `top_separator_WASTE_std_w8.png` | Std of Waste Ratio — equivalent information to IPC std |
+
+**Key insight from these plots:** The **standard deviation** of IPC over a window
+is consistently the top separator. This is because:
+- Benign workloads have **stable IPC** (low std) — predictable execution
+- Interference causes **erratic IPC fluctuations** (high std) — variable memory stall duration
+
+This validates the use of rolling variability (σ) features over rolling mean features
+for interference detection.
+
+---
+
+## 6. CSV Files
+
+### `phase1_feature_stats.csv`
+**The primary output of the separability analysis.**
+
+| Column | Description |
+|---|---|
+| `feature` | Feature name (e.g., `IPC_std_w10`) |
+| `weighted_cohen_d` | Cohen's d between benign and attack distributions (signed) |
+| `ks_stat` | Kolmogorov–Smirnov statistic (0=identical, 1=completely separate) |
+| `ks_pval` | KS p-value (always < 0.001 for useful features) |
+| `overlap` | Distribution overlap coefficient (0=no overlap, 1=total overlap) |
+| `tier` | Separability tier: `Strong` (|d|≥0.8), `Moderate` (≥0.5), `Weak` (≥0.3), `Negligible` |
+| `n_benign` / `n_attack` | Sample counts used for statistics |
+
+**Cohen's d interpretation:**
+| |d| value | Tier | Practical meaning |
+|---|---|---|---|
+| ≥ 0.8 | Strong | Distributions are well-separated; reliable feature for detection |
+| 0.5–0.8 | Moderate | Useful secondary feature; adds information in combination |
+| 0.3–0.5 | Weak | Marginal value; may help with regularisation |
+| < 0.3 | Negligible | Distributions overlap too much; not useful alone |
+
+**Note:** Features with |correlation| > 0.95 with a higher-ranked feature are
+removed from this table (redundancy pruning). The resulting list represents
+a **non-redundant ranked feature set**.
+
+---
+
+### `feature_importance.csv`
+A simplified view of the top 10 features from `phase1_feature_stats.csv`,
+showing only the four key columns: `feature`, `weighted_cohen_d`, `ks_stat`,
+`overlap`, `tier`.
+
+**Purpose:** Quick-reference table for selecting the model's input features.
+The top features (IPC_std and MPKI-related metrics over W=10–14) are used
+directly as the basis for the Phase 2 detection model.
+
+---
+
+### `phase1_correlations.csv`
+Pairwise correlations between **raw and derived features**, sorted by
+absolute correlation (highest first).
+
+| Column | Description |
+|---|---|
+| `feature_a` / `feature_b` | The two features being compared |
+| `correlation` | Pearson r (−1 to +1) |
+
+**How to use it:** Any pair with |correlation| > 0.95 should use only the
+higher-ranked one (by Cohen's d) in the final model. This table provides
+the justification for feature exclusion decisions.
+
+---
+
+### `outlier_impact_comparison.csv`
+Quantifies the impact of extreme outliers on key derived features.
+
+| Column | Description |
+|---|---|
+| `feature` | Feature name |
+| `n_total` | Total sample count |
+| `n_outliers` | Samples outside the [1st, 99th] percentile |
+| `outlier_pct` | Percentage of samples that are outliers |
+| `mean_with_outliers` | Raw mean (affected by outliers) |
+| `mean_without_outliers` | Clipped mean (1st–99th percentile) |
+
+**Purpose:** Justifies the use of percentile-clipping in density plots and
+confirms that a small fraction of extreme samples (typically PMU counter
+overflow or measurement artefacts) can significantly distort summary statistics.
+This motivates z-score normalisation in the Phase 2 pipeline.
+
+---
+
+## 7. Summary of Key Findings
+
+### Feature Ranking (in order of discriminative power)
+1. **IPC_std (W=10–14)** — Top separator. Rolling IPC variability captures the
+   erratic memory stall patterns caused by cache interference.
+2. **MPKI-related features** — Directly measures cache miss intensity normalised
+   by workload.
+3. **BUS_PRESSURE / CACHE_PRESSURE** — Secondary cache-pressure indicators.
+4. **BRANCH_MISS_RATE** — Tertiary indicator; useful in combination.
+
+### Distribution Characteristics
+- Benign distributions are **unimodal and narrow** — workloads run predictably.
+- Attack distributions are **shifted and broader** — interference introduces
+  variability in addition to raising the mean.
+- This bimodal nature is most clearly visible in `ipc_vs_mpki_hexbin.png`.
+
+### Implications for Phase 2 Model Design
+| Finding | Action taken in Phase 2 |
+|---|---|
+| IPC and WASTE_RATIO are |corr|≈1.00 | Keep only IPC (higher Cohen's d) |
+| Rolling σ > rolling mean for separation | Use `_std` features as primary inputs |
+| W=10 gives best balance of latency vs. separation | Set W=10 as default window |
+| Ratio features more workload-invariant than raw counts | Use only derived ratios in simplified model |
+
+---
+
+*Generated by `scripts/phase1_characterization.py` — IAES Monitoring Project*

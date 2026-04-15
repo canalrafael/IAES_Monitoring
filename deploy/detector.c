@@ -277,9 +277,9 @@ int main(int argc, char *argv[])
 
     while (fgets(line, sizeof(line), csv)) {
         line_no++;
-        /* Accept lines with either 5 or 6 columns (label may be absent) */
+        /* Accept lines with 6 columns after timestamp (label may be absent) */
         int parsed = sscanf(line,
-            "%llu,%llu,%llu,%llu,%llu,%llu",
+            "%*[^,],%llu,%llu,%llu,%llu,%llu,%llu",
             (unsigned long long *)&s.cpu_cycles,
             (unsigned long long *)&s.instructions,
             (unsigned long long *)&s.cache_misses,

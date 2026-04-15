@@ -1,0 +1,56 @@
+================================================================
+  Phase 2 Simplified — ROC/Pareto Evaluation
+  Features: 4 ratio signals × 3 stats = 12
+  Config  : W=10, 2×16, LR=0.002
+  Target  : Recall ≥ 0.99, FPR ≤ 0.01
+================================================================
+
+Loading files...
+  Benign files: 10  |  Attack files: 13
+  Train: 7 benign + 9 attack files
+  Test : 3 benign + 4 attack files
+
+  Train samples: 200,000  (benign 93,911 / attack 106,089)
+  Class ratio  : 0.89:1
+
+  MLP params   : 497
+
+Training MLP...
+    Early stop @ epoch 93
+  Done in 71.1s  (93 epochs)
+  Optimal T    : 1.1531
+
+Training Logistic Regression baseline...
+
+Collecting test probabilities...
+Running threshold sweeps on test set...
+
+==================================================================
+  ROC Pareto — Threshold Sweep on Test Set
+  Target region: Recall ≥ 0.99, FPR ≤ 0.01
+==================================================================
+  Model                    N   Best τ   Recall      FPR       F1  In-Region?
+  ──────────────────────────────────────────────────────────────
+  MLP                    N=1   0.8342   0.9904   0.0507   0.9600  ✗
+  MLP                    N=3   0.8291   0.9934   0.0504   0.9617  ✗
+  MLP                    N=5   0.8291   0.9930   0.0503   0.9616  ✗
+  MLP                    N=7   0.8392   0.9900   0.0500   0.9602  ✗
+  LogisticRegression     N=—   0.2864   0.9901   0.1923   0.8736  ✗
+  ──────────────────────────────────────────────────────────────
+
+  ROC AUC:
+    MLP N=1: AUC = 0.9826
+    MLP N=3: AUC = 0.9828
+    MLP N=5: AUC = 0.9830
+    MLP N=7: AUC = 0.9831
+    LR  N=—: AUC = 0.9588
+
+  ⚠  Threshold Sensitivity Note:
+     Performance is strongly τ-dependent. The calibration-set τ
+     does not transfer reliably to test files with different workloads.
+     ROC curves above reflect the true model capability space.
+     Operational deployment requires per-deployment τ recalibration.
+
+All outputs saved to  results/phase2_simplified/
+Done.
+
