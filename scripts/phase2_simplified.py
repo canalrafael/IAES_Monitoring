@@ -241,17 +241,50 @@ def ema(vals, a=0.3):
     return out
 
 def plot_curves(h, out_dir):
-    for metric, label, fname in [('loss','Loss','loss_curve.png'),
-                                  ('acc','Accuracy','learning_curve.png')]:
+    # Save individual curves
+    for metric, label, title, fname in [
+        ('loss', 'Loss', 'Loss Curve', 'loss_curve.png'),
+        ('acc', 'Accuracy', 'Learning Curve', 'learning_curve.png')
+    ]:
         plt.figure()
         plt.plot(h[f'train_{metric}'], alpha=0.25, color='steelblue')
         plt.plot(ema(h[f'train_{metric}']), color='steelblue', lw=2, label=f'Train {label}')
-        plt.plot(h[f'val_{metric}'],   alpha=0.25, color='coral')
-        plt.plot(ema(h[f'val_{metric}']),   color='coral',     lw=2, label=f'Val {label}')
-        plt.xlabel('Epoch'); plt.ylabel(label)
-        plt.title(f'{label} Curve — 12-Feature Simplified Model')
-        plt.legend(); plt.tight_layout()
-        plt.savefig(os.path.join(out_dir, fname)); plt.close()
+        plt.plot(h[f'val_{metric}'], alpha=0.25, color='coral')
+        plt.plot(ema(h[f'val_{metric}']), color='coral', lw=2, label=f'Val {label}')
+        plt.xlabel('Epoch')
+        plt.ylabel(label) # Y-axis remains Loss or Accuracy
+        plt.title(f'{title} — 12-Feature Simplified Model') # Title dynamically handles 'Learning Curve'
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(os.path.join(out_dir, fname))
+        plt.close()
+
+    # Save Dual Combined Plot Natively
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    
+    # Subplot 1: Loss Space
+    axes[0].plot(h['train_loss'], alpha=0.25, color='steelblue')
+    axes[0].plot(ema(h['train_loss']), color='steelblue', lw=2, label='Train Loss')
+    axes[0].plot(h['val_loss'], alpha=0.25, color='coral')
+    axes[0].plot(ema(h['val_loss']), color='coral', lw=2, label='Val Loss')
+    axes[0].set_xlabel('Epoch', fontsize=12)
+    axes[0].set_ylabel('Loss', fontsize=12)
+    axes[0].set_title('Model Loss Curve', fontsize=14)
+    axes[0].legend(fontsize=12)
+    
+    # Subplot 2: Learning Space (Requested Label)
+    axes[1].plot(h['train_acc'], alpha=0.25, color='steelblue')
+    axes[1].plot(ema(h['train_acc']), color='steelblue', lw=2, label='Train Accuracy')
+    axes[1].plot(h['val_acc'], alpha=0.25, color='coral')
+    axes[1].plot(ema(h['val_acc']), color='coral', lw=2, label='Val Accuracy')
+    axes[1].set_xlabel('Epoch', fontsize=12)
+    axes[1].set_ylabel('Accuracy', fontsize=12)
+    axes[1].set_title('Model Learning Curve', fontsize=14)
+    axes[1].legend(fontsize=12)
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(out_dir, 'combined_learning_loss_curve.png'), dpi=200)
+    plt.close()
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
