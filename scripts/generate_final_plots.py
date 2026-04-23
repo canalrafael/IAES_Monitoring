@@ -13,9 +13,17 @@ from sklearn.model_selection import train_test_split
 
 # Styling
 sns.set_theme(style="whitegrid", palette="bright")
-plt.rcParams['figure.figsize'] = (12, 10)
+plt.rcParams.update({
+    'font.size': 16,
+    'axes.titlesize': 24,
+    'axes.labelsize': 20,
+    'legend.fontsize': 18,
+    'xtick.labelsize': 16,
+    'ytick.labelsize': 16,
+    'axes.titleweight': 'bold'
+})
 
-DATA_DIR = 'data/'
+DATA_DIR = 'data/train data/'
 RESULTS_DIR = 'results/phase2/'
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
@@ -103,7 +111,7 @@ def main():
     counter = 0
     
     print("Training best candidate for diagnostics...")
-    for epoch in range(1000):
+    for epoch in range(100):
         model.train()
         t_loss, t_correct, t_total = 0, 0, 0
         for b_X, b_y in train_loader:

@@ -36,7 +36,7 @@ import matplotlib.patches as mpatches
 import time
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-DATA_DIR    = 'data/'
+DATA_DIR    = 'data/train data/'
 OUT_DIR     = 'results/phase2_simplified/training_dynamics/'
 os.makedirs(OUT_DIR, exist_ok=True)
 

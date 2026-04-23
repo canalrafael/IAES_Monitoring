@@ -1,0 +1,6 @@
+File,Total Timestamps,Attack States,System Recall,System FPR
+data_new0_clean.csv,9751,9751,97.16%,0.00%
+data_new1_clean.csv,47550,47550,98.09%,0.00%
+data_new2_clean.csv,48450,0,0.00%,98.54%
+data_new3_clean.csv,49951,49951,97.99%,0.00%
+data_new4_clean.csv,110400,0,0.00%,98.43%

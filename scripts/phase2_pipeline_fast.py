@@ -53,7 +53,7 @@ import seaborn as sns
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-DATA_DIR    = 'data/'
+DATA_DIR    = 'data/train data/'
 RESULTS_DIR = 'results/phase2/'
 MODELS_DIR  = 'models/'
 CACHE_DIR   = 'cache/phase2_features/'   # NEW: disk cache location

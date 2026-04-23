@@ -1,0 +1,18 @@
+BENCH_ID:
+0 -> Iddle
+1 -> Bandwidth
+2 -> Disparity
+3 -> FFT
+4 -> QSort
+5 -> Dijkstra
+6 -> SHA
+7 -> Sorting
+10 -> Spectre
+11 -> Armageddon
+12 -> Meltdown
+
+
+LABEL: 
+0 -> data collected from a secure core with benchmark running alone; 
+1 -> data collected from a unstruted core with attack running alone; 
+2 -> data collected from benchmark running in one core, but with attacks running in another core; 3 ->  data collect from attacks running in one core, but with benchmarks running in another core. Note, 2 and 3 are not ambiguous, 2 I am collecting data from the benchmark core, but have an attack occouring in another, and, 3 I am collecting that from the attack core, but with benchmark running in another one.

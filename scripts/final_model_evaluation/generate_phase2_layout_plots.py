@@ -14,7 +14,7 @@ from sklearn.metrics import confusion_matrix, roc_curve, auc
 sns.set_theme(style="whitegrid", palette="bright")
 plt.rcParams['figure.figsize'] = (12, 10)
 
-DATA_DIR    = 'data/'
+DATA_DIR    = 'data/train data/'
 RESULTS_DIR = 'results/final_model_evaluation/'
 MODELS_DIR  = 'models/simplified/'
 os.makedirs(RESULTS_DIR, exist_ok=True)

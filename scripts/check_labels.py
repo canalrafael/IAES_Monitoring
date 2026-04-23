@@ -2,7 +2,7 @@ import pandas as pd
 import glob
 import os
 
-DATA_DIR = 'data/'
+DATA_DIR = 'data/train data/'
 csv_files = glob.glob(os.path.join(DATA_DIR, "*.csv"))
 
 dist = []

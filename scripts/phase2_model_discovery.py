@@ -16,7 +16,7 @@ import time
 sns.set_theme(style="whitegrid", palette="muted")
 plt.rcParams['figure.figsize'] = (12, 8)
 
-DATA_DIR = 'data/'
+DATA_DIR = 'data/train data/'
 RESULTS_DIR = 'results/phase2/'
 MODELS_DIR = 'models/'
 os.makedirs(RESULTS_DIR, exist_ok=True)

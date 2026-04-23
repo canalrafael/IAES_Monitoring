@@ -27,7 +27,7 @@ from sklearn.inspection import permutation_importance
 from torch.utils.data import DataLoader, TensorDataset
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-DATA_DIR    = 'data/'
+DATA_DIR    = 'data/train data/'
 RESULTS_DIR = 'results/final_model_evaluation/'
 MODELS_DIR  = 'models/simplified/'
 os.makedirs(RESULTS_DIR, exist_ok=True)

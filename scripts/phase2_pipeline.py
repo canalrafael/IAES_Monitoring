@@ -21,7 +21,7 @@ plt.rcParams['font.size'] = 12
 # FEATURE CACHE (Mandatory for speed)
 feature_cache = {}
 
-DATA_DIR = 'data/'
+DATA_DIR = 'data/train data/'
 RESULTS_DIR = 'results/phase2/'
 MODELS_DIR = 'models/'
 os.makedirs(RESULTS_DIR, exist_ok=True)

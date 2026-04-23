@@ -58,7 +58,7 @@ import seaborn as sns
 import time
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-DATA_DIR    = 'data/'
+DATA_DIR    = 'data/train data/'
 RESULTS_DIR = 'results/phase2_simplified_v3/'
 MODELS_DIR  = 'models/simplified_v3/'
 os.makedirs(RESULTS_DIR, exist_ok=True)

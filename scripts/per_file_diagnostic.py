@@ -32,7 +32,7 @@ import matplotlib.patches as mpatches
 import seaborn as sns
 
 # ── Config (must match V3) ─────────────────────────────────────────────────────
-DATA_DIR    = 'data/'
+DATA_DIR    = 'data/train data/'
 MODELS_DIR  = 'models/simplified_v3/'
 RESULTS_DIR = 'results/phase2_simplified_v3/per_file_diagnostic/'
 os.makedirs(RESULTS_DIR, exist_ok=True)

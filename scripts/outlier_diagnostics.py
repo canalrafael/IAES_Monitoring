@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score, recall_score, precision_score
 from scipy import stats
 
-DATA_DIR = 'data/'
+DATA_DIR = 'data/train data/'
 RESULTS_DIR = 'results/phase1/'
 os.makedirs(RESULTS_DIR, exist_ok=True)
 

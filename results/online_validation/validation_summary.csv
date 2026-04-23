@@ -1,0 +1,6 @@
+File,Samples,Label 2 Count,Label 3 Count,Recall (L2 Interference),Recall (L3 Attack Core),Parity with Previous Run
+data_new0_clean.csv,29253,19502,9751,69.03%,66.94%,41.56%
+data_new1_clean.csv,142648,95098,47550,69.44%,66.74%,41.81%
+data_new2_clean.csv,145350,0,0,0.00%,0.00%,93.23%
+data_new3_clean.csv,149853,99902,49951,70.82%,68.15%,42.79%
+data_new4_clean.csv,331200,0,0,0.00%,0.00%,93.41%

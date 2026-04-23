@@ -9,11 +9,19 @@ from scipy.spatial.distance import jensenshannon
 
 # ── Style ──────────────────────────────────────────────────────────────────────
 sns.set_theme(style='whitegrid', palette='muted')
-plt.rcParams.update({'figure.figsize': (10, 6), 'font.size': 12})
+plt.rcParams.update({'figure.figsize': (10, 6), 'font.size': 16})
+plt.rcParams.update({
+    'axes.titlesize': 24,
+    'axes.labelsize': 20,
+    'legend.fontsize': 20,
+    'xtick.labelsize': 18,
+    'ytick.labelsize': 18,
+    'axes.titleweight': 'bold'
+})
 BENIGN_COLOR = '#2196F3' # blue
 ATTACK_COLOR = '#F44336' # red
 
-DATA_DIR = 'data/'
+DATA_DIR = 'data/train data/'
 RESULTS_DIR = 'results/replicated_analysis/'
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
@@ -102,9 +110,32 @@ def main():
     # 1 & 2. Replicate KDE Plot and Scatterplot (Label 0 & 1) Combined
     print("Generating combined plots...")
     
-    # Create a 1x2 figure
-    fig, axes = plt.subplots(1, 2, figsize=(20, 8))
+    # 1. Standalone: Branch Misses Density Plot
+    print("Generating standalone BRANCH_MISSES plot...")
+    plt.figure(figsize=(10, 6))
+    b_bm = df_0['BRANCH_MISSES'].dropna().values
+    a_bm = df_2['BRANCH_MISSES'].dropna().values
     
+    if len(b_bm) > 1:
+        sns.kdeplot(b_bm, fill=True, color='blue', alpha=0.3, label='0')
+    if len(a_bm) > 1:
+        sns.kdeplot(a_bm, fill=True, color='red', alpha=0.3, label='2')
+        
+    plt.title('Density Distribution: BRANCH_MISSES (Benign vs Interference)')
+    plt.xlabel('BRANCH_MISSES')
+    plt.ylabel('Density')
+    plt.xlim(-50000, 650000)
+    plt.ylim(0, 1.05e-5)
+    plt.legend(title='LABEL')
+    plt.tight_layout()
+    plt.savefig(os.path.join(RESULTS_DIR, 'branch_misses_distribution.png'), dpi=300)
+    plt.close()
+
+    # 2. Combined Analysis: 1x2 layout (Waste Ratio & Scatter)
+    print("Generating combined 1x2 plot...")
+    fig, axes = plt.subplots(1, 2, figsize=(18, 8))
+
+
     # Subplot 1: Execution Waste Isolation density plot
     b_vals = df_0['PIPELINE_WASTE'].dropna().values
     a_vals = df_1['PIPELINE_WASTE'].dropna().values
@@ -119,9 +150,9 @@ def main():
     if len(a_plot) > 1:
         sns.kdeplot(a_plot, fill=True, color=ATTACK_COLOR, alpha=0.3, label='Untrusted Domain (Attack)', ax=axes[0])
         
-    axes[0].set_title('Execution Waste Isolation (Stall vs Compute Phase)', fontsize=16, fontweight='bold')
-    axes[0].set_xlabel('Pipeline Waste Ratio (Penalties / Usable Cycles)', fontsize=12)
-    axes[0].set_ylabel('Density', fontsize=12)
+    axes[0].set_title('Execution Waste Isolation (Stall vs Compute Phase)')
+    axes[0].set_xlabel('Pipeline Waste Ratio (Penalties / Usable Cycles)')
+    axes[0].set_ylabel('Density')
     
     # Subplot 2: Scatterplot without marginals
     import warnings
@@ -138,13 +169,14 @@ def main():
                     palette={'Secure Domain': BENIGN_COLOR, 'Untrusted Domain': ATTACK_COLOR},
                     s=15, alpha=0.5, ax=axes[1], legend=False)
                     
-    axes[1].set_title('BRANCH_MISS_RATE vs IPC', fontsize=16, fontweight='bold')
-    axes[1].set_xlabel('IPC', fontsize=12)
-    axes[1].set_ylabel('BRANCH_MISS_RATE', fontsize=12)
+    axes[1].set_title('BRANCH_MISS_RATE vs IPC')
+    axes[1].set_xlabel('IPC')
+    axes[1].set_ylabel('BRANCH_MISS_RATE')
     
-    # Global centered legend spanning both graphics
+    # Global centered legend
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 1.05), ncol=2, fontsize=15, frameon=True)
+    fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 1.05), ncol=2, frameon=True)
+
     
     # Adjust layout and save as a single image
     plt.tight_layout(rect=[0, 0, 1, 0.92])

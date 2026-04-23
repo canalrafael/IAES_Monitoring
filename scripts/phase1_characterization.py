@@ -41,11 +41,20 @@ from scipy.stats import ks_2samp
 
 # ── Style ──────────────────────────────────────────────────────────────────────
 sns.set_theme(style='whitegrid', palette='muted')
-plt.rcParams.update({'figure.figsize': (12, 8), 'font.size': 12})
+plt.rcParams.update({
+    'figure.figsize': (10, 6),
+    'font.size': 16,
+    'axes.titlesize': 24,
+    'axes.labelsize': 20,
+    'legend.fontsize': 18,
+    'xtick.labelsize': 16,
+    'ytick.labelsize': 16,
+    'axes.titleweight': 'bold'
+})
 BENIGN_COLOR = '#2196F3'
 ATTACK_COLOR = '#F44336'
 
-DATA_DIR    = 'data/'
+DATA_DIR    = 'data/train data/'
 RESULTS_DIR = 'results/phase1/'
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
@@ -143,9 +152,18 @@ def density_plot(benign_vals, attack_vals, title, fname):
         sns.kdeplot(bv, fill=True, color=BENIGN_COLOR, alpha=0.55, label='Benign', linewidth=2)
     if len(av) > 1:
         sns.kdeplot(av, fill=True, color=ATTACK_COLOR, alpha=0.55, label='Attack', linewidth=2)
-    plt.title(f'Distribution: {title}', fontsize=13)
-    plt.xlabel(title, fontsize=12); plt.ylabel('Density', fontsize=12)
-    plt.legend(fontsize=11); plt.tight_layout()
+    # Only apply fixed axes to the RAW BRANCH_MISSES counter, not the RATE
+    if title == 'Branch Mispredictions' or title == 'BRANCH_MISSES':
+        plt.title('Density Distribution: BRANCH_MISSES (Benign vs Interference)')
+        plt.xlabel('BRANCH_MISSES')
+        plt.xlim(-50000, 650000)
+        plt.ylim(0, 1.05e-5)
+    else:
+        plt.title(f'Distribution: {title}')
+        plt.xlabel(title)
+        
+    plt.ylabel('Density')
+    plt.legend(); plt.tight_layout()
     plt.savefig(fname, dpi=130); plt.close()
 
 
@@ -167,9 +185,9 @@ def hexbin_plot(xb, yb, xa, ya, xlabel, ylabel, fname):
         hb = ax.hexbin(x[m2], y[m2], gridsize=40, cmap='Blues' if label == 'Benign' else 'Reds',
                        mincnt=1)
         plt.colorbar(hb, ax=ax, label='Count')
-        ax.set_title(f'{label}', fontsize=12)
-        ax.set_xlabel(xlabel, fontsize=11); ax.set_ylabel(ylabel, fontsize=11)
-    plt.suptitle(f'{ylabel} vs {xlabel}', fontsize=13, fontweight='bold')
+        ax.set_title(f'{label}')
+        ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
+    plt.suptitle(f'{ylabel} vs {xlabel}', fontweight='bold')
     plt.tight_layout(); plt.savefig(fname, dpi=130); plt.close()
 
 
@@ -230,22 +248,8 @@ def main():
                      os.path.join(RESULTS_DIR, f'density_{fname_sfx}.png'))
         print(f'    density_{fname_sfx}.png')
 
-    # ── 2. Hexbin plots
-    print('\n[2] Generating hexbin plots...')
-    hexbin_plot(raw_benign['IPC'],              raw_benign['MPKI'],
-                raw_attack['IPC'],              raw_attack['MPKI'],
-                'IPC', 'MPKI',
-                os.path.join(RESULTS_DIR, 'ipc_vs_mpki_hexbin.png'))
-    print('    ipc_vs_mpki_hexbin.png')
-
-    hexbin_plot(raw_benign['BRANCH_MISS_RATE'], raw_benign['MPKI'],
-                raw_attack['BRANCH_MISS_RATE'], raw_attack['MPKI'],
-                'Branch Miss Rate', 'MPKI',
-                os.path.join(RESULTS_DIR, 'branch_miss_rate_vs_mpki_hexbin.png'))
-    print('    branch_miss_rate_vs_mpki_hexbin.png')
-
-    # ── 3. Correlation matrix
-    print('\n[3] Generating correlation matrix...')
+    # ── 3. Correlation matrix calculation (Still needed for CSV output)
+    print('\n[3] Calculating correlation matrix...')
     all_keys = list(RAW_FEATURES) + list(DERIVED_FEATURES)
     corr_data = {}
     for k in all_keys:
@@ -264,17 +268,8 @@ def main():
     corr_df = pd.DataFrame({k: v[:min_len] for k, v in corr_data.items()})
     corr_matrix = corr_df.corr()
 
-    fig, ax = plt.subplots(figsize=(14, 12))
-    mask = np.triu(np.ones_like(corr_matrix, dtype=bool), k=1)
-    sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='RdBu_r',
-                center=0, vmin=-1, vmax=1,
-                square=True, linewidths=0.5, ax=ax,
-                annot_kws={'size': 9})
-    ax.set_title('Feature Correlation Matrix (Pooled: Benign + Attack)', fontsize=13)
-    plt.tight_layout()
-    plt.savefig(os.path.join(RESULTS_DIR, 'correlation_matrix.png'), dpi=130)
-    plt.close()
-    print('    correlation_matrix.png')
+    # [REMOVED] Correlation matrix plot generation
+
 
     # ── 4. phase1_correlations.csv (key pairwise correlations)
     high_corr_pairs = []
@@ -436,22 +431,8 @@ def main():
     imp_df.to_csv(os.path.join(RESULTS_DIR, 'feature_importance.csv'), index=False)
     print('    feature_importance.csv  (top 10)')
 
-    # ── 7. Top separator plots (top 5 strong/moderate)
-    print('\n[6] Generating top separator density plots...')
-    top_feats = final_df[final_df['tier'].isin(['Strong', 'Moderate'])].head(5)
-    for feat in top_feats['feature'].values:
-        tier = top_feats[top_feats['feature'] == feat]['tier'].values[0]
-        b    = accumulator.samples[feat][0]
-        att  = accumulator.samples[feat][2]
-        plt.figure(figsize=(12, 6))
-        sns.kdeplot(b,   fill=True, color=BENIGN_COLOR, alpha=0.55, label='Benign',  linewidth=2)
-        sns.kdeplot(att, fill=True, color=ATTACK_COLOR, alpha=0.55, label='Attack', linewidth=2)
-        plt.title(f'Top Separator: {feat}  ({tier})', fontsize=13)
-        plt.xlabel(feat, fontsize=12); plt.ylabel('Density', fontsize=12)
-        plt.legend(fontsize=11); plt.tight_layout()
-        fname = os.path.join(RESULTS_DIR, f'top_separator_{feat}.png')
-        plt.savefig(fname, dpi=130); plt.close()
-        print(f'    top_separator_{feat}.png')
+    # [REMOVED] Top separator density plots generation
+
 
     # ── 8. Summary report
     print('\n[7] Writing phase1_report.md...')
@@ -511,14 +492,10 @@ def main():
         '| File | Description |',
         '|---|---|',
         '| `density_*.png` | KDE density plots per feature (benign vs attack) |',
-        '| `ipc_vs_mpki_hexbin.png` | 2D joint distribution: IPC vs MPKI |',
-        '| `branch_miss_rate_vs_mpki_hexbin.png` | 2D joint: Branch Miss Rate vs MPKI |',
-        '| `correlation_matrix.png` | Pairwise correlation of all features |',
         '| `phase1_correlations.csv` | Pairwise correlation table |',
-        '| `feature_importance.csv` | Top 10 features by Cohen\'s d |',
         '| `phase1_feature_stats.csv` | Full ranked + pruned feature statistics |',
         '| `outlier_impact_comparison.csv` | Effect of outlier removal on mean |',
-        '| `top_separator_*.png` | Density plots for top 5 separating features |',
+        '| `feature_importance.csv` | Top 10 features by Cohen\'s d |',
     ]
     with open(os.path.join(RESULTS_DIR, 'phase1_report.md'), 'w') as fh:
         fh.write('\n'.join(report_lines) + '\n')
