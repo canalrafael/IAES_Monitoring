@@ -3,7 +3,7 @@ import os
 from collections import Counter
 
 # Define the directory containing the data files
-data_dir = 'data/'
+data_dir = '/home/canal/github/IAES_Monitoring/data/online validation data/'
 
 # Initialize a global counter for all files
 total_label_counts = Counter()

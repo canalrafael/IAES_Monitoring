@@ -54,24 +54,25 @@ def engineer_features(df):
 # 1. Load and Prepare Data (L0 vs L3)
 print("Loading data for Bao-Specific training...")
 csv_files = [
-    os.path.join(DATA_DIR, 'data_new18_clean.csv'),
-    os.path.join(DATA_DIR, 'data_new19_clean.csv')
+    os.path.join(DATA_DIR, 'data_new20_clean.csv'),
+    os.path.join(DATA_DIR, 'data_new21_clean.csv')
 ]
 dfs = []
 for f in csv_files:
     df_raw = pd.read_csv(f)
-    # Filter for Benign (0) and Attacker (3)
-    # We include all data for feature engineering first to maintain rolling state
     df_eng = engineer_features(df_raw)
-    # Then filter
-    dfs.append(df_eng[df_eng['LABEL'].isin([0, 3])])
+    # Filter for Active samples only to find a cleaner signature
+    df_active = df_eng[df_eng['CPU_CYCLES'] > 100000].copy()
+    
+    # Filter for Normal (0), Attacker (1), Interference (2), and Attack+Interf (3)
+    dfs.append(df_active[df_active['LABEL'].isin([0, 1, 2, 3])])
 
 full_df = pd.concat(dfs, ignore_index=True)
 
 X_raw = full_df[[f'{sig}_{stat}' for sig in FEATURES for stat in ['mean', 'std', 'delta']]]
-y = (full_df['LABEL'] == 3).astype(int).values
+y = (full_df['LABEL'].isin([1, 2, 3])).astype(int).values
 
-print(f"Dataset size: {len(X_raw)} samples ({sum(y==0)} Benign, {sum(y==1)} Attacker)")
+print(f"Dataset size: {len(X_raw)} samples ({sum(y==0)} Normal, {sum(y==1)} Attack)")
 
 # 2. Normalization
 scaler = StandardScaler()
@@ -92,10 +93,13 @@ class MLP(nn.Module):
         return self.net(x)
 
 model = MLP()
-criterion = nn.BCEWithLogitsLoss()
+# pos_weight < 1.0 reduces sensitivity (less recall, lower FPR)
+# We use 0.1 to give Normal class 10x more importance
+pos_weight = torch.tensor([0.1])
+criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 X_train_t = torch.FloatTensor(X_train)
 y_train_t = torch.FloatTensor(y_train).view(-1, 1)
