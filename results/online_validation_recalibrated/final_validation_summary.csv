@@ -1,4 +1,9 @@
 File,Recall,FPR,Samples
+data_new05_clean.csv,0.00%,0.01%,64500
+data_new06_clean.csv,99.64%,0.00%,221628
+data_new07_clean.csv,99.75%,0.00%,86623
+data_new08_clean.csv,99.76%,0.00%,259925
+data_new09_clean.csv,0.00%,0.01%,364950
 data_new0_clean.csv,99.51%,0.00%,29253
 data_new1_clean.csv,99.53%,0.00%,142648
 data_new2_clean.csv,0.00%,0.00%,145350

@@ -53,7 +53,10 @@ def engineer_features(df):
 
 # 1. Load and Prepare Data (L0 vs L3)
 print("Loading data for Bao-Specific training...")
-csv_files = glob.glob(os.path.join(DATA_DIR, 'data_new*_clean.csv'))
+csv_files = [
+    os.path.join(DATA_DIR, 'data_new18_clean.csv'),
+    os.path.join(DATA_DIR, 'data_new19_clean.csv')
+]
 dfs = []
 for f in csv_files:
     df_raw = pd.read_csv(f)
@@ -92,7 +95,7 @@ model = MLP()
 criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
 
 X_train_t = torch.FloatTensor(X_train)
 y_train_t = torch.FloatTensor(y_train).view(-1, 1)
@@ -164,10 +167,5 @@ def export_to_c(model, scaler, out_path):
 print(f"Exporting weights to {DEPLOY_DIR}/model_weights.h")
 export_to_c(model, scaler, os.path.join(DEPLOY_DIR, "model_weights.h"))
 
-# 5. Copy C files
-print("Copying detector files...")
-import shutil
-shutil.copy(os.path.join(BASE_DIR, "deploy", "detector.c"), os.path.join(DEPLOY_DIR, "detector.c"))
-shutil.copy(os.path.join(BASE_DIR, "deploy", "detector.h"), os.path.join(DEPLOY_DIR, "detector.h"))
-
+# 5. Done
 print("Done! Online Validation model is ready in deploy/online_validation/")

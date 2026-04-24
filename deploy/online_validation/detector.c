@@ -149,6 +149,24 @@ det_output_t detector_process_sample(cpuid_t cpu_id, const pmu_sample_t *sample)
         mean_v[s]  = sum / (float)MDL_WINDOW_SIZE;
 
         /* Sample std (ddof=1), matching pandas .std() used during training. */
+        /* 
+         * [TIP/FUTURE FIX] Numerical Instability Warning:
+         * The 1-pass variance formula below ((sum_sq - N * mean^2) / (N-1)) can 
+         * suffer from catastrophic cancellation in 32-bit floats when the variance 
+         * is very small (e.g., during steady-state attack or idle). 
+         * This can result in a garbage negative number on bare-metal AArch64, 
+         * causing std_v to clamp to 0.0f and dropping the anomaly probability to 9%.
+         * 
+         * If you experience erratic probability drops during steady workloads, 
+         * replace this with the 2-pass variance algorithm:
+         * 
+         * float sum_dev = 0.0f;
+         * for (int w = 0; w < MDL_WINDOW_SIZE; w++) {
+         *     float dev = s_ring[cpu_id][s][w] - mean_v[s];
+         *     sum_dev += dev * dev;
+         * }
+         * float var = sum_dev / (float)(MDL_WINDOW_SIZE - 1);
+         */
         float var  = (sum_sq - (float)MDL_WINDOW_SIZE * mean_v[s] * mean_v[s])
                    / (float)(MDL_WINDOW_SIZE - 1);
         std_v[s]   = bm_sqrtf(var > 0.0f ? var : 0.0f);
