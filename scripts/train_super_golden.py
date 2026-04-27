@@ -51,7 +51,7 @@ train_files = glob.glob(os.path.join(TRAIN_DIR, "*.csv"))
 valid_files = glob.glob(os.path.join(VALID_DIR, "*.csv"))
 all_files = sorted(train_files + valid_files)
 
-files = [f for f in all_files if "29" not in f and "30" not in f and "31" not in f and "32" not in f]
+files = all_files
 
 print(f"Loading and engineering features for {len(files)} datasets...", flush=True)
 dfs = []
@@ -70,7 +70,7 @@ print(f"Total Combined Samples after engineering: {len(df):,}", flush=True)
 df_attack = df[df['LABEL'].isin([1, 2, 3])]
 df_benign = df[~df['LABEL'].isin([1, 2, 3])]
 
-n_samples = min(500000, len(df_attack), len(df_benign))
+n_samples = min(len(df_attack), len(df_benign))
 print(f"Balancing dataset down to {n_samples:,} samples per class...", flush=True)
 
 
@@ -114,8 +114,8 @@ criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([0.1]).to(device))
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 # 5. Training Loop
-batch_size = 65536
-epochs = 50
+batch_size = 4096
+epochs = 1000
 
 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-5)
 

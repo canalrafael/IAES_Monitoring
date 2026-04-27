@@ -11,18 +11,21 @@ from scipy.spatial.distance import jensenshannon
 sns.set_theme(style='whitegrid', palette='muted')
 plt.rcParams.update({'figure.figsize': (10, 6), 'font.size': 16})
 plt.rcParams.update({
-    'axes.titlesize': 24,
-    'axes.labelsize': 20,
-    'legend.fontsize': 20,
-    'xtick.labelsize': 18,
-    'ytick.labelsize': 18,
-    'axes.titleweight': 'bold'
+    'axes.titlesize': 28,
+    'axes.labelsize': 26,
+    'legend.fontsize': 22,
+    'xtick.labelsize': 20,
+    'ytick.labelsize': 20,
+    'axes.titleweight': 'bold',
+    'axes.labelweight': 'bold'
 })
 BENIGN_COLOR = '#2196F3' # blue
 ATTACK_COLOR = '#F44336' # red
 
-DATA_DIR = 'data/train data/'
-RESULTS_DIR = 'results/replicated_analysis/'
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(SCRIPT_DIR)
+DATA_DIR = os.path.join(BASE_DIR, 'data', 'train data')
+RESULTS_DIR = os.path.join(BASE_DIR, 'results', 'replicated_analysis')
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 def overlap_coefficient(x, y, bins=100):
@@ -146,13 +149,19 @@ def main():
     a_plot = a_vals[(a_vals >= lo) & (a_vals <= hi)]
     
     if len(b_plot) > 1:
-        sns.kdeplot(b_plot, fill=True, color=BENIGN_COLOR, alpha=0.3, label='Secure Domain (Benign)', ax=axes[0])
+        sns.kdeplot(b_plot, fill=True, color=BENIGN_COLOR, alpha=0.3, label='Secure Domain', ax=axes[0])
     if len(a_plot) > 1:
-        sns.kdeplot(a_plot, fill=True, color=ATTACK_COLOR, alpha=0.3, label='Untrusted Domain (Attack)', ax=axes[0])
+        sns.kdeplot(a_plot, fill=True, color=ATTACK_COLOR, alpha=0.3, label='Untrusted Domain', ax=axes[0])
         
-    axes[0].set_title('Execution Waste Isolation (Stall vs Compute Phase)')
-    axes[0].set_xlabel('Pipeline Waste Ratio (Penalties / Usable Cycles)')
+    axes[0].set_title('Execution Waste Isolation')
+    axes[0].set_xlabel('Pipeline Waste Ratio')
     axes[0].set_ylabel('Density')
+    # Exact scale as requested
+    axes[0].set_ylim(0, 3.9) 
+    axes[0].tick_params(axis='both', which='major', labelsize=26, width=2)
+    # Force bold tick labels
+    for label in axes[0].get_xticklabels() + axes[0].get_yticklabels():
+        label.set_fontweight('bold')
     
     # Subplot 2: Scatterplot without marginals
     import warnings
@@ -169,17 +178,23 @@ def main():
                     palette={'Secure Domain': BENIGN_COLOR, 'Untrusted Domain': ATTACK_COLOR},
                     s=15, alpha=0.5, ax=axes[1], legend=False)
                     
-    axes[1].set_title('BRANCH_MISS_RATE vs IPC')
+    axes[1].set_title('Branch Misses vs IPC')
     axes[1].set_xlabel('IPC')
-    axes[1].set_ylabel('BRANCH_MISS_RATE')
+    axes[1].set_ylabel('Branch Miss Rate')
+    # Exact scale as requested
+    axes[1].set_ylim(0, 0.0175) 
+    axes[1].tick_params(axis='both', which='major', labelsize=26, width=2)
+    # Force bold tick labels
+    for label in axes[1].get_xticklabels() + axes[1].get_yticklabels():
+        label.set_fontweight('bold')
     
-    # Global centered legend
+    # Global centered legend - Mid-term position (1.02)
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 1.05), ncol=2, frameon=True)
+    fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 1.02), ncol=2, frameon=True)
 
     
     # Adjust layout and save as a single image
-    plt.tight_layout(rect=[0, 0, 1, 0.92])
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
     fig.savefig(os.path.join(RESULTS_DIR, 'combined_analysis.png'), dpi=300, bbox_inches='tight')
     plt.close()
 
