@@ -5,8 +5,9 @@ from collections import Counter
 # Define the directory containing the data files
 data_dir = '/home/canal/github/IAES_Monitoring/data/online validation data/'
 
-# Initialize a global counter for all files
+# Initialize global counters for all files
 total_label_counts = Counter()
+total_bench_counts = Counter()
 
 # Check if the directory exists
 if os.path.exists(data_dir):
@@ -28,22 +29,30 @@ if os.path.exists(data_dir):
                 if 'LABEL' in df.columns:
                     # Count for the current file
                     current_file_counts = df['LABEL'].value_counts()
-                    
                     for label, count in current_file_counts.items():
-                        print(f"{file_name:<25} | {label:<10} | {count}")
-                        # Add to the global total
                         total_label_counts[label] += count
-                else:
-                    print(f"{file_name:<25} | Error: 'LABEL' column not found")
-                    
+                
+                if 'BENCH_ID' in df.columns:
+                    current_bench_counts = df['BENCH_ID'].value_counts()
+                    for bid, count in current_bench_counts.items():
+                        total_bench_counts[bid] += count
+                        
             except Exception as e:
                 print(f"Error processing {file_name}: {e}")
 
-        # Print the General Sum Summary
+        # Print the Summaries
         print("\n" + "="*50)
         print(f"{'GENERAL SUM OF EACH LABEL':^50}")
         print("="*50)
         for label, total in sorted(total_label_counts.items()):
             print(f"Label {label:<10} | Total Count: {total}")
+
+        print("\n" + "="*50)
+        print(f"{'GENERAL SUM OF EACH BENCHMARK':^50}")
+        print("="*50)
+        BENCH_NAMES = {0: "Idle", 1: "Bandwidth", 2: "Disparity", 3: "FFT", 4: "QSort", 5: "Dijkstra", 6: "SHA", 7: "Sorting", 10: "Spectre", 11: "Armageddon", 12: "Meltdown"}
+        for bid, total in sorted(total_bench_counts.items()):
+            name = BENCH_NAMES.get(bid, f"Bench {bid}")
+            print(f"{name:<15} (ID {bid:<2}) | Total Count: {total}")
 else:
     print(f"Directory '{data_dir}' not found.")

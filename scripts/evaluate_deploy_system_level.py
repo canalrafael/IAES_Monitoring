@@ -69,7 +69,8 @@ def run_system_level_validation():
         
         # Process in order to maintain temporal state in the C model
         for i, row in df.iterrows():
-            cpu_id = i % 3 # Assuming rows are ordered: T1_C0, T1_C1, T1_C2, T2_C0, ...
+            cpu_id = int(row['CORE_ID']) % 4 if 'CORE_ID' in df.columns else i % 3
+
             sample = PMUSample(
                 int(row['CPU_CYCLES']),
                 int(row['INSTRUCTIONS']),

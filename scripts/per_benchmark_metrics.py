@@ -57,7 +57,7 @@ def run_per_benchmark_analysis():
         print(f"Error: {e}")
         return
 
-    csv_files = sorted(glob.glob(os.path.join(DATA_DIR, 'data_new*_clean.csv')))
+    csv_files = sorted(glob.glob(os.path.join(DATA_DIR, '*.csv')))
     all_results = []
 
     for f_path in csv_files:
@@ -69,7 +69,8 @@ def run_per_benchmark_analysis():
         
         preds_status = []
         for i, row in df.iterrows():
-            cpu_id = i % 3
+            cpu_id = int(row['CORE_ID']) % 4
+
             sample = PMUSample(
                 int(row['CPU_CYCLES']),
                 int(row['INSTRUCTIONS']),

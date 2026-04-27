@@ -1,6 +1,0 @@
-File,Total,L0 (Benign Alone),L1 (Attack Alone),L2 (Interfered),L3 (Attacker)
-data_new0_clean.csv,29253,0,0,19502,9751
-data_new1_clean.csv,142648,0,0,95098,47550
-data_new2_clean.csv,145350,145350,0,0,0
-data_new3_clean.csv,149853,0,0,99902,49951
-data_new4_clean.csv,331200,331200,0,0,0

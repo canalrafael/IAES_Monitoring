@@ -1,6 +1,12 @@
 File,Samples,Label 2 Count,Label 3 Count,Recall (L2 Interference),Recall (L3 Attack Core),Parity with Previous Run
-data_new0_clean.csv,29253,19502,9751,69.03%,66.94%,41.56%
-data_new1_clean.csv,142648,95098,47550,69.44%,66.74%,41.81%
-data_new2_clean.csv,145350,0,0,0.00%,0.00%,93.23%
-data_new3_clean.csv,149853,99902,49951,70.82%,68.15%,42.79%
-data_new4_clean.csv,331200,0,0,0.00%,0.00%,93.41%
+data_new22_clean.csv,163596,54000,27000,71.34%,73.86%,68.02%
+data_new23_clean.csv,163596,54000,27000,70.92%,73.06%,68.96%
+data_new24_clean.csv,308496,102000,51000,74.29%,76.50%,68.22%
+data_new25_clean.csv,171021,54000,27000,70.94%,73.47%,69.72%
+data_new26_clean.csv,308496,102000,51000,74.31%,76.52%,67.41%
+data_new27_clean.csv,137271,43350,21675,75.62%,77.76%,68.90%
+data_new28_clean.csv,83721,25650,12825,79.83%,82.20%,67.31%
+data_new29_clean.csv,312546,102000,51000,74.24%,76.28%,67.67%
+data_new30_clean.csv,270246,90000,45000,70.80%,73.13%,69.07%
+data_new31_clean.csv,306246,102000,51000,74.37%,76.79%,68.04%
+data_new32_clean.csv,310971,102000,51000,74.29%,76.54%,67.97%
