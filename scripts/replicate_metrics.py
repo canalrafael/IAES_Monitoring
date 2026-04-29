@@ -129,7 +129,7 @@ def main():
     plt.ylabel('Density')
     plt.xlim(-50000, 650000)
     plt.ylim(0, 1.05e-5)
-    plt.legend(title='LABEL')
+    plt.legend(title='LABEL', prop={'size': 26, 'weight': 'bold'})
     plt.tight_layout()
     plt.savefig(os.path.join(RESULTS_DIR, 'branch_misses_distribution.png'), dpi=300)
     plt.close()
@@ -188,9 +188,9 @@ def main():
     for label in axes[1].get_xticklabels() + axes[1].get_yticklabels():
         label.set_fontweight('bold')
     
-    # Global centered legend - Mid-term position (1.02)
+    # Global centered legend - Mid-term position (1.08)
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 1.02), ncol=2, frameon=True)
+    fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 1.08), ncol=2, frameon=True, prop={'size': 26, 'weight': 'bold'})
 
     
     # Adjust layout and save as a single image
